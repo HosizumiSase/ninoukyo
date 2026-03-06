@@ -2,12 +2,276 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>忍桜郷 相関図テスト</title>
-    <link rel="stylesheet" href="style.css">
-    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>忍桜郷 相関図 (GitHub Pages版)</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+            overscroll-behavior: none;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .node-card {
+            transition: transform 0.05s linear, box-shadow 0.2s, border-color 0.2s;
+            backface-visibility: hidden;
+            -webkit-font-smoothing: subpixel-antialiased;
+            touch-action: none;
+        }
+
+            .node-card.is-dragging {
+                box-shadow: 0 25px 30px -5px rgba(0, 0, 0, 0.2), 0 15px 15px -5px rgba(0, 0, 0, 0.1);
+                z-index: 100 !important;
+                border-color: #ec4899;
+                transform: scale(1.05);
+                transition: none;
+            }
+
+            .node-card.is-expanded {
+                z-index: 60;
+            }
+
+            .node-card:hover {
+                border-color: #cbd5e1;
+                z-index: 50;
+            }
+
+        .relation-mode .node-card {
+            cursor: crosshair !important;
+        }
+
+            .relation-mode .node-card:hover {
+                border-color: #ec4899 !important;
+                box-shadow: 0 0 0 4px rgba(236, 72, 153, 0.2);
+            }
+
+        .relation-mode .relation-label {
+            pointer-events: auto;
+            cursor: pointer;
+        }
+
+            .relation-mode .relation-label:hover rect {
+                fill: #fdf2f8;
+                stroke: #ec4899;
+                stroke-width: 2px;
+            }
+
+            .relation-mode .relation-label:hover text {
+                fill: #ec4899;
+                font-weight: bold;
+            }
+
+        .grabbing {
+            cursor: grabbing !important;
+        }
+
+        .grab {
+            cursor: grab;
+        }
+
+        .no-select {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .hidden-node {
+            opacity: 0.1;
+            pointer-events: none;
+            filter: grayscale(100%);
+        }
+
+        .node-card.compact {
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+            .node-card.compact .node-name-label {
+                position: absolute;
+                top: 100%;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 140px;
+                text-align: center;
+                font-size: 10px;
+                font-weight: bold;
+                color: #475569;
+                margin-top: 4px;
+                pointer-events: none;
+                text-shadow: 0 1px 2px rgba(255,255,255,0.8);
+            }
+
+        .swal2-popup {
+            font-family: inherit !important;
+            border-radius: 1rem !important;
+            font-size: 0.9rem !important;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+        }
+
+        .swal2-title {
+            font-size: 1.25rem !important;
+            color: #1e293b !important;
+        }
+
+        div.swal2-container {
+            background-color: rgba(0, 0, 0, 0.5) !important;
+        }
+
+        body.swal2-toast-shown div.swal2-container {
+            background-color: transparent !important;
+        }
+
+        .swal2-input, .swal2-textarea {
+            font-size: 0.95rem !important;
+        }
+
+        #canvas-container {
+            touch-action: none;
+        }
+    </style>
 </head>
-<body>
-    <div id="mynetwork"></div>
+<body class="bg-slate-50 text-slate-900 h-screen w-screen overflow-hidden flex flex-col" oncontextmenu="return false;" onclick="closeAllMenus(event)">
+
+    <header class="bg-white border-b px-4 py-2 shadow-sm z-30 shrink-0 relative flex justify-between items-center h-14">
+        <div class="flex items-center gap-3 overflow-hidden">
+            <button onclick="toggleSidebar()" class="p-2 text-slate-600 hover:bg-slate-100 rounded-full hover:text-pink-600 transition-colors focus:outline-none" title="メンバーリスト">
+                <i data-lucide="list" width="20"></i>
+            </button>
+            <div class="flex items-center gap-2">
+                <div class="bg-pink-500 p-1.5 rounded text-white shrink-0 hidden xs:block">
+                    <i data-lucide="share-2" width="20"></i>
+                </div>
+                <h1 class="font-bold text-lg text-slate-800 leading-tight whitespace-nowrap">忍桜郷 相関図</h1>
+            </div>
+        </div>
+
+        <button onclick="toggleHeaderMenu()" class="sm:hidden p-2 text-slate-600 hover:bg-slate-100 rounded focus:outline-none ml-auto">
+            <i data-lucide="menu" width="24" id="header-menu-icon"></i>
+        </button>
+
+        <div id="header-controls" class="hidden sm:flex ml-auto items-center gap-2">
+            <div class="flex items-center gap-2">
+                <button id="btn-view-mode-pc" onclick="toggleCompactMode()" class="text-xs bg-white border border-slate-300 text-slate-600 px-3 py-2 rounded hover:bg-slate-50 flex items-center gap-2 transition whitespace-nowrap">
+                    <i data-lucide="minimize-2" width="14" id="icon-view-mode-pc"></i> <span id="text-view-mode-pc">縮小</span>
+                </button>
+                <button id="btn-relation-mode-pc" onclick="toggleRelationMode()" class="text-xs bg-pink-50 border border-pink-200 text-pink-700 px-3 py-2 rounded hover:bg-pink-100 hover:border-pink-300 hover:shadow-sm flex items-center gap-2 transition whitespace-nowrap font-bold">
+                    <i data-lucide="edit-3" width="14"></i> 編集
+                </button>
+                <div class="relative">
+                    <button id="filter-btn-pc" onclick="toggleFilterMenu(event)" class="text-xs bg-white border border-slate-300 text-slate-600 px-3 py-2 rounded hover:bg-slate-50 flex items-center gap-2 transition whitespace-nowrap">
+                        <i data-lucide="filter" width="14"></i> フィルタ <i data-lucide="chevron-down" width="12"></i>
+                    </button>
+                    <div id="filter-menu-pc" class="hidden absolute top-full right-0 mt-1 w-48 bg-white border border-slate-200 rounded-lg shadow-xl z-50 p-2 text-xs text-left">
+                        <label class="flex items-center gap-2 p-2 hover:bg-slate-50 rounded cursor-pointer border-b border-slate-100 mb-1">
+                            <input type="checkbox" id="filter-all-pc" checked onchange="toggleAllFilters(this)" class="rounded text-pink-500 focus:ring-pink-500">
+                            <span class="font-bold text-slate-700">全選択 / 解除</span>
+                        </label>
+                        <div id="filter-list-pc" class="space-y-1 max-h-60 overflow-y-auto"></div>
+                    </div>
+                </div>
+                <button onclick="arrangeByGroup()" class="text-xs bg-white border border-slate-300 text-slate-600 px-3 py-2 rounded hover:bg-pink-50 hover:text-pink-600 hover:border-pink-200 flex items-center gap-1 transition whitespace-nowrap">
+                    <i data-lucide="layout-grid" width="14"></i> 整列
+                </button>
+                <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                <button onclick="copyAsImage()" class="text-xs bg-white border border-slate-300 text-slate-600 px-2 py-2 rounded hover:bg-teal-50 hover:text-teal-600 hover:border-teal-200 transition" title="画像としてコピー">
+                    <i data-lucide="camera" width="14"></i>
+                </button>
+                <button onclick="resetZoom()" class="text-xs text-slate-400 font-mono hover:bg-slate-100 px-2 py-1 rounded cursor-pointer transition" title="クリックでリセット">
+                    <span id="zoom-level">100%</span>
+                </button>
+                <button onclick="showConfigModal()" class="text-xs bg-white border border-slate-300 text-slate-600 px-2 py-2 rounded hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 transition">
+                    <i data-lucide="save" width="14"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div id="mobile-menu" class="hidden sm:hidden absolute top-14 left-0 w-full bg-white border-b shadow-lg z-20 p-4 flex-col gap-4">
+        <div class="grid grid-cols-2 gap-2">
+            <button onclick="toggleCompactMode()" class="text-xs bg-slate-50 border border-slate-200 text-slate-700 px-3 py-3 rounded flex items-center justify-center gap-2"><i data-lucide="minimize-2" width="14"></i> 表示切替</button>
+            <button onclick="toggleRelationMode()" class="text-xs bg-pink-50 border border-pink-200 text-pink-700 px-3 py-3 rounded flex items-center justify-center gap-2 font-bold"><i data-lucide="edit-3" width="14"></i> 編集モード</button>
+            <button onclick="arrangeByGroup()" class="text-xs bg-slate-50 border border-slate-200 text-slate-700 px-3 py-3 rounded flex items-center justify-center gap-2"><i data-lucide="layout-grid" width="14"></i> 整列</button>
+            <button onclick="copyAsImage()" class="text-xs bg-slate-50 border border-slate-200 text-slate-700 px-3 py-3 rounded flex items-center justify-center gap-2"><i data-lucide="camera" width="14"></i> 画像保存</button>
+            <button onclick="showConfigModal()" class="text-xs bg-slate-50 border border-slate-200 text-slate-700 px-3 py-3 rounded flex items-center justify-center gap-2"><i data-lucide="save" width="14"></i> データ</button>
+        </div>
+        <div class="border-t pt-2">
+            <div class="text-xs font-bold text-slate-500 mb-2">フィルタ</div>
+            <div id="filter-list-mobile" class="space-y-2 max-h-40 overflow-y-auto"></div>
+        </div>
+        <div class="flex justify-end gap-2 border-t pt-2">
+            <button onclick="resetZoom()" class="text-xs text-slate-500 bg-slate-100 px-3 py-2 rounded">Zoom 100%</button>
+            <button onclick="resetData()" class="text-xs text-red-500 bg-red-50 px-3 py-2 rounded">リセット</button>
+        </div>
+    </div>
+
+    <div class="flex-1 relative overflow-hidden flex w-full h-full">
+        <aside id="sidebar" class="absolute top-0 left-0 bottom-0 w-80 bg-white border-r shadow-xl z-40 transform -translate-x-full transition-transform duration-300 ease-in-out flex flex-col">
+            <div class="p-3 border-b flex justify-between items-center bg-slate-50">
+                <h2 class="font-bold text-slate-700 flex items-center gap-2"><i data-lucide="users" width="16"></i> メンバー一覧</h2>
+                <button onclick="toggleSidebar()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" width="20"></i></button>
+            </div>
+            <div class="p-2 border-b">
+                <input type="text" id="search-input" placeholder="名前で検索..." oninput="filterMemberList()" class="w-full px-3 py-2 text-sm border rounded bg-slate-50 focus:bg-white focus:ring-2 focus:ring-pink-200 outline-none transition">
+            </div>
+            <div id="member-list" class="flex-1 overflow-y-auto p-2 space-y-2 bg-slate-50/50"></div>
+        </aside>
+
+        <main id="canvas-container" class="flex-1 relative overflow-hidden bg-[#fdf2f8] cursor-grab select-none w-full h-full touch-none">
+            <div id="loading" class="absolute inset-0 flex items-center justify-center bg-white/80 z-50">
+                <div class="animate-spin text-pink-500"><i data-lucide="loader-2" width="32" height="32"></i></div>
+            </div>
+
+            <div class="absolute top-4 left-4 z-30">
+                <button onclick="toggleSidebar()" class="bg-white p-3 rounded-full shadow-md border border-slate-200 text-slate-500 hover:text-pink-600 transition-colors">
+                    <i data-lucide="list" width="24" height="24"></i>
+                </button>
+            </div>
+
+            <div id="mode-indicator" class="hidden absolute top-4 left-1/2 -translate-x-1/2 bg-pink-600 text-white px-4 py-2 rounded-full shadow-lg z-40 text-sm font-bold animate-bounce pointer-events-none whitespace-nowrap">
+                編集モード：カードをドラッグで矢印追加
+            </div>
+
+            <div id="world" class="absolute top-0 left-0 w-full h-full origin-top-left">
+                <svg id="edges-layer" class="absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible z-0">
+                    <defs>
+                        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8" />
+                        </marker>
+                        <marker id="arrowhead-active" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#ec4899" />
+                        </marker>
+                    </defs>
+                    <g id="static-edges"></g>
+                    <line id="drag-line" x1="0" y1="0" x2="0" y2="0" stroke="#ec4899" stroke-width="2" stroke-dasharray="5,5" marker-end="url(#arrowhead-active)" class="hidden" />
+                </svg>
+                <div id="nodes-layer" class="absolute top-0 left-0 w-full h-full z-10 pointer-events-none"></div>
+            </div>
+
+            <div class="absolute bottom-4 left-4 z-30">
+                <button id="legend-btn" onclick="toggleLegend()" class="bg-white p-3 rounded-full shadow-md border border-slate-200 text-slate-500 hover:text-pink-600 transition-colors">
+                    <i data-lucide="help-circle" width="24" height="24"></i>
+                </button>
+                <div id="legend-content" class="hidden absolute bottom-12 left-0 mb-2 w-48 bg-white/95 backdrop-blur p-3 rounded-lg shadow-xl border text-xs space-y-2 pointer-events-auto select-none origin-bottom-left transition-all">
+                    <div class="font-bold text-slate-700 border-b pb-1 mb-1">操作ガイド</div>
+                    <div class="flex items-center gap-2 text-slate-600"><i data-lucide="hand" width="14"></i> ドラッグ: 移動</div>
+                    <div class="flex items-center gap-2 text-slate-600"><i data-lucide="maximize" width="14"></i> ピンチ: 拡大縮小</div>
+                    <div class="flex items-center gap-2 text-slate-600"><i data-lucide="edit-3" width="14"></i> 編集モード: 矢印追加</div>
+                    <div class="text-[10px] text-slate-400 mt-1 pt-1 border-t text-center">タップで閉じる</div>
+                </div>
+            </div>
+        </main>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>
