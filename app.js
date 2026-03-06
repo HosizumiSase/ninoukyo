@@ -1,8 +1,3 @@
-// プロの小技：文章内にカンマ（、や , ）が含まれていてデータがズレるのを防ぐため、
-// format=csv ではなく format=tsv（タブ区切り）で取得します！
-const membersUrl = "https://docs.google.com/spreadsheets/d/1JFVoWc_eaSYJUFbgM_dgLLlPxXrU08dVQAjxuYmre7Q/export?format=tsv&gid=0";
-const relationsUrl = "https://docs.google.com/spreadsheets/d/1JFVoWc_eaSYJUFbgM_dgLLlPxXrU08dVQAjxuYmre7Q/export?format=tsv&gid=746317027";
-
 <script>
     const STORAGE_POS_KEY = 'shinobizakura_positions_v9';
     let activeGroups = [];
